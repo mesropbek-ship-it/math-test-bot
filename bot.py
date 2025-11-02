@@ -1,6 +1,6 @@
+import os
 import logging
 import json
-import os
 import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -8,19 +8,24 @@ from telegram.ext import (
     MessageHandler, filters, ContextTypes, ConversationHandler
 )
 
+# Получаем токен из переменных окружения
+BOT_TOKEN = os.environ.get('BOT_TOKEN', 'your_bot_token_here')
+
 # Настройка логирования
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 
-BOT_TOKEN = "8362080499:AAGZJ_LH5Xr9tb7Tm7tcXFbmGOe6-4mzVaI"
-
 # Состояния разговора
 MAIN_MENU, SELECTING_TEST, WAITING_ANSWERS = range(3)
 
 # Время теста в секундах (1 час + 5 минут = 65 минут)
 TEST_TIME_SECONDS = 65 * 60  # 3900 секунд
+
+print("=" * 50)
+print("🤖 Бот запускается на Render...")
+print("=" * 50)
 
 class TestManager:
     def __init__(self):
@@ -39,21 +44,19 @@ class TestManager:
     
     def load_tests(self):
         """Загружает тесты из JSON файлов"""
-        tests = {}
-        if os.path.exists(self.tests_dir):
-            for filename in os.listdir(self.tests_dir):
-                if filename.endswith('.json'):
-                    test_id = filename[:-5]  # убираем .json
-                    try:
-                        with open(os.path.join(self.tests_dir, filename), 'r', encoding='utf-8') as f:
-                            tests[test_id] = json.load(f)
-                        print(f"✅ Загружен тест: {test_id}")
-                    except Exception as e:
-                        print(f"❌ Ошибка загрузки теста {test_id}: {e}")
-        else:
-            print("❌ Папка tests не существует")
-        
-        print(f"📁 Всего загружено тестов: {len(tests)}")
+        tests = {
+            'test1': {
+                'name': 'Тест #1 - Математика',
+                'questions_count': 30,
+                'pdf_filename': 'math_test1.pdf',
+                'correct_answers': [
+                    'B', 'A', 'B', 'D', 'C', 'A', 'D', 'D', 'A', 'A',
+                    'B', 'C', 'B', 'C', 'A', 'D', 'B', 'C', 'B', 'C',
+                    'A', 'C', 'C', 'A', 'C', 'A', 'D', 'C', 'B', 'C'
+                ]
+            }
+        }
+        print(f"📁 Загружено тестов: {len(tests)}")
         return tests
     
     def get_test(self, test_id):
@@ -135,6 +138,16 @@ class TestManager:
         
         with open(user_file, 'w', encoding='utf-8') as f:
             json.dump(user_data, f, ensure_ascii=False, indent=2)
+    
+    def get_user_statistics(self, user_id):
+        """Получает статистику пользователя"""
+        user_file = os.path.join(self.stats_dir, f'{user_id}.json')
+        
+        if not os.path.exists(user_file):
+            return None
+        
+        with open(user_file, 'r', encoding='utf-8') as f:
+            return json.load(f)
 
 async def timer_task(context: ContextTypes.DEFAULT_TYPE, chat_id: int, test_name: str):
     """Задача таймера - ждет и отправляет сообщение о завершении времени"""
@@ -210,10 +223,7 @@ async def show_test_selection(update: Update, context: ContextTypes.DEFAULT_TYPE
         
         await query.edit_message_text(
             "📝 Доступные тесты\n\n"
-            "Пока нет доступных тестов.\n\n"
-            "Чтобы добавить тест:\n"
-            "1. Создайте JSON файл в data/tests/\n"
-            "2. Положите PDF в data/pdfs/",
+            "Пока нет доступных тестов.",
             reply_markup=reply_markup
         )
         return MAIN_MENU
@@ -236,7 +246,7 @@ async def show_test_selection(update: Update, context: ContextTypes.DEFAULT_TYPE
     return SELECTING_TEST
 
 async def select_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик выбора теста - отправляет PDF и запускает таймер"""
+    """Обработчик выбора теста"""
     query = update.callback_query
     await query.answer()
     
@@ -256,47 +266,16 @@ async def select_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['test_completed'] = False
     context.user_data['time_expired'] = False
     
-    # Пытаемся отправить PDF
-    pdf_filename = test.get('pdf_filename')
-    if pdf_filename:
-        pdf_path = test_manager.get_pdf_path(pdf_filename)
-        if os.path.exists(pdf_path):
-            try:
-                with open(pdf_path, 'rb') as pdf_file:
-                    await query.message.reply_document(
-                        document=pdf_file,
-                        filename=f"{test['name']}.pdf",
-                        caption=f"📄 {test['name']}\n\n"
-                               f"📊 Вопросов: {test['questions_count']}\n"
-                               f"⏰ Время: 1 час 5 минут\n\n"
-                               f"➡️ После решения пришлите {test['questions_count']} ответов в формате:\n"
-                               f"A,B,C,D,A,B,..."
-                    )
-            except Exception as e:
-                print(f"❌ Ошибка отправки PDF: {e}")
-                await query.message.reply_text(
-                    f"❌ Ошибка отправки PDF файла\n\n"
-                    f"📋 {test['name']}\n"
-                    f"📊 Вопросов: {test['questions_count']}\n"
-                    f"⏰ Время: 1 час 5 минут\n\n"
-                    f"➡️ Пришлите {test['questions_count']} ответов: A,B,C,D,..."
-                )
-        else:
-            await query.message.reply_text(
-                f"❌ PDF файл не найден: {pdf_filename}\n\n"
-                f"📋 {test['name']}\n"
-                f"📊 Вопросов: {test['questions_count']}\n"
-                f"⏰ Время: 1 час 5 минут\n\n"
-                f"➡️ Пришлите {test['questions_count']} ответов: A,B,C,D,..."
-            )
-    else:
-        await query.message.reply_text(
-            f"📋 {test['name']}\n"
-            f"📊 Вопросов: {test['questions_count']}\n"
-            f"⏰ Время: 1 час 5 минут\n\n"
-            f"➡️ Пришлите {test['questions_count']} ответов в формате:\n"
-            f"A,B,C,D,A,B,..."
-        )
+    # Отправляем информацию о тесте
+    await query.edit_message_text(
+        f"📋 {test['name']}\n"
+        f"📊 Вопросов: {test['questions_count']}\n"
+        f"⏰ Время: 1 час 5 минут\n\n"
+        f"➡️ Пришлите {test['questions_count']} ответов в формате:\n"
+        f"A,B,C,D,A,B,...\n\n"
+        f"Пример для {test['questions_count']} вопросов:\n"
+        f"{','.join(['A','B','C','D'] * (test['questions_count'] // 4 + 1))[:test['questions_count']*2-1]}"
+    )
     
     # Запускаем таймер
     context.user_data['timer_task'] = asyncio.create_task(
@@ -451,12 +430,13 @@ async def show_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Как пользоваться:\n"
         "1. Выберите 'Выбор теста'\n"
         "2. Выберите нужный тест\n"
-        "3. Бот отправит PDF с вопросами\n"
-        "4. ⏰ У вас 1 час 5 минут на решение\n"
-        "5. Пришлите ответы в формате: A,B,C,D,A,B,...\n"
-        "6. Получите результат\n\n"
-        "⏰ ВАЖНО: Если не успеете отправить ответы за 1 час 5 минут,\n"
-        "тест будет автоматически завершен!",
+        "3. ⏰ У вас 1 час 5 минут на решение\n"
+        "4. Пришлите ответы в формате: A,B,C,D,A,B,...\n"
+        "5. Получите результат\n\n"
+        "Формат ответов:\n"
+        "• Только A, B, C, D\n"
+        "• Через запятую\n"
+        "• Количество ответов = количеству вопросов",
         reply_markup=reply_markup
     )
     return MAIN_MENU
@@ -515,8 +495,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     """Запуск бота"""
-    print("🤖 Запуск бота для проверки тестов с исправленным таймером...")
+    print("🚀 Запуск бота на Render...")
     
+    # Создаем application
     application = Application.builder().token(BOT_TOKEN).build()
     
     # Настройка обработчиков
@@ -542,10 +523,11 @@ def main():
     application.add_handler(conv_handler)
     application.add_handler(CommandHandler('help', help_command))
     
-    print("✅ Бот запущен! Напишите /start в Telegram")
-    print("⏰ Таймер теста: 1 час 5 минут")
-    print("🔔 Бот будет писать 'ВРЕМЯ ВЫШЛО!' если не успеете")
-    application.run_polling()
+    print("✅ Бот запущен и готов к работе!")
+    print("📱 Ожидание сообщений...")
+    
+    # Запуск бота с обработкой ошибок
+    application.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__':
     main()
