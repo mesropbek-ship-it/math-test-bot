@@ -1,0 +1,6 @@
+{
+    "name": "Тест #1 - Математика",
+    "questions_count": 30,
+    "pdf_filename": "math_test1.pdf",
+    "correct_answers": ["B", "A", "B", "D", "C", "A", "D", "D", "A", "A", "B", "C", "B", "C", "A", "D", "B", "C", "B", "C", "A", "C", "C", "A", "C", "A", "D", "C", "B", "C"]
+}
