@@ -1,6 +1,6 @@
-import os
 import logging
 import json
+import os
 import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -8,16 +8,13 @@ from telegram.ext import (
     MessageHandler, filters, ContextTypes, ConversationHandler
 )
 
-# Получаем токен из переменных окружения
-BOT_TOKEN = os.environ.get('BOT_TOKEN', 'your_bot_token_here')
-
 # Настройка логирования
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 
-print("🤖 Бот запускается на Render...")
+BOT_TOKEN = "8362080499:AAGZJ_LH5Xr9tb7Tm7tcXFbmGOe6-4mzVaI"
 
 # Состояния разговора
 MAIN_MENU, SELECTING_TEST, WAITING_ANSWERS = range(3)
@@ -138,16 +135,6 @@ class TestManager:
         
         with open(user_file, 'w', encoding='utf-8') as f:
             json.dump(user_data, f, ensure_ascii=False, indent=2)
-    
-    def get_user_statistics(self, user_id):
-        """Получает статистику пользователя"""
-        user_file = os.path.join(self.stats_dir, f'{user_id}.json')
-        
-        if not os.path.exists(user_file):
-            return None
-        
-        with open(user_file, 'r', encoding='utf-8') as f:
-            return json.load(f)
 
 async def timer_task(context: ContextTypes.DEFAULT_TYPE, chat_id: int, test_name: str):
     """Задача таймера - ждет и отправляет сообщение о завершении времени"""
@@ -468,10 +455,8 @@ async def show_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "4. ⏰ У вас 1 час 5 минут на решение\n"
         "5. Пришлите ответы в формате: A,B,C,D,A,B,...\n"
         "6. Получите результат\n\n"
-        "Формат ответов:\n"
-        "• Только A, B, C, D\n"
-        "• Через запятую\n"
-        "• Количество ответов = количеству вопросов",
+        "⏰ ВАЖНО: Если не успеете отправить ответы за 1 час 5 минут,\n"
+        "тест будет автоматически завершен!",
         reply_markup=reply_markup
     )
     return MAIN_MENU
@@ -528,61 +513,39 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда помощи"""
     await update.message.reply_text("Используйте /start для открытия главного меню")
 
-class MathTestBot:
-    def __init__(self):
-        print("🤖 Инициализация бота...")
-        self.application = Application.builder().token(BOT_TOKEN).build()
-        self.setup_handlers()
-    
-    def setup_handlers(self):
-        """Настройка обработчиков команд"""
-        print("🔄 Настройка обработчиков...")
-        
-        conv_handler = ConversationHandler(
-            entry_points=[CommandHandler('start', start)],
-            states={
-                MAIN_MENU: [
-                    CallbackQueryHandler(main_menu_handler, pattern='^(select_test|show_stats|help)$'),
-                    CallbackQueryHandler(back_to_menu, pattern='^back_to_menu$'),
-                    CallbackQueryHandler(show_details, pattern='^show_details$')
-                ],
-                SELECTING_TEST: [
-                    CallbackQueryHandler(select_test, pattern='^test_'),
-                    CallbackQueryHandler(back_to_menu, pattern='^back_to_menu$')
-                ],
-                WAITING_ANSWERS: [
-                    MessageHandler(filters.TEXT & ~filters.COMMAND, process_answers)
-                ],
-            },
-            fallbacks=[CommandHandler('cancel', back_to_menu)]
-        )
-        
-        self.application.add_handler(conv_handler)
-        self.application.add_handler(CommandHandler('help', help_command))
-        
-        print("✅ Обработчики настроены")
-    
-    def run(self):
-        """Запуск бота"""
-        print("🚀 Запуск бота...")
-        print(f"✅ Бот токен: {BOT_TOKEN[:10]}...")
-        self.application.run_polling()
-
 def main():
-    """Запуск бота с авто-перезапуском"""
-    print("=" * 50)
-    print("🤖 МАТЕМАТИЧЕСКИЙ ТЕСТ БОТ")
-    print("=" * 50)
+    """Запуск бота"""
+    print("🤖 Запуск бота для проверки тестов с исправленным таймером...")
     
-    while True:
-        try:
-            bot = MathTestBot()
-            bot.run()
-        except Exception as e:
-            print(f"💥 Ошибка: {e}")
-            print("🔄 Перезапуск через 10 секунд...")
-            import time
-            time.sleep(10)
+    application = Application.builder().token(BOT_TOKEN).build()
+    
+    # Настройка обработчиков
+    conv_handler = ConversationHandler(
+        entry_points=[CommandHandler('start', start)],
+        states={
+            MAIN_MENU: [
+                CallbackQueryHandler(main_menu_handler, pattern='^(select_test|show_stats|help)$'),
+                CallbackQueryHandler(back_to_menu, pattern='^back_to_menu$'),
+                CallbackQueryHandler(show_details, pattern='^show_details$')
+            ],
+            SELECTING_TEST: [
+                CallbackQueryHandler(select_test, pattern='^test_'),
+                CallbackQueryHandler(back_to_menu, pattern='^back_to_menu$')
+            ],
+            WAITING_ANSWERS: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, process_answers)
+            ],
+        },
+        fallbacks=[CommandHandler('cancel', back_to_menu)]
+    )
+    
+    application.add_handler(conv_handler)
+    application.add_handler(CommandHandler('help', help_command))
+    
+    print("✅ Бот запущен! Напишите /start в Telegram")
+    print("⏰ Таймер теста: 1 час 5 минут")
+    print("🔔 Бот будет писать 'ВРЕМЯ ВЫШЛО!' если не успеете")
+    application.run_polling()
 
 if __name__ == '__main__':
     main()
