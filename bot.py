@@ -43,21 +43,43 @@ class TestManager:
         self.tests = self.load_tests()
     
     def load_tests(self):
-        """Загружает тесты из JSON файлов"""
-        tests = {
-            'test1': {
-                'name': 'Тест #1 - Математика',
-                'questions_count': 30,
-                'pdf_filename': 'math_test1.pdf',
-                'correct_answers': [
-                    'B', 'A', 'B', 'D', 'C', 'A', 'D', 'D', 'A', 'A',
-                    'B', 'C', 'B', 'C', 'A', 'D', 'B', 'C', 'B', 'C',
-                    'A', 'C', 'C', 'A', 'C', 'A', 'D', 'C', 'B', 'C'
-                ]
-            }
+    """Загружает тесты из JSON файлов и создает пример если нет файлов"""
+    tests = {}
+    
+    # Создаем папку tests если ее нет
+    os.makedirs(self.tests_dir, exist_ok=True)
+    
+    # Если папка tests пустая - создаем пример теста
+    if not os.listdir(self.tests_dir):
+        print("📝 Создаю пример теста...")
+        example_test = {
+            "name": "Тест #1 - Математика",
+            "questions_count": 30,
+            "correct_answers": [
+                'B', 'A', 'B', 'D', 'C', 'A', 'D', 'D', 'A', 'A',
+                'B', 'C', 'B', 'C', 'A', 'D', 'B', 'C', 'B', 'C',
+                'A', 'C', 'C', 'A', 'C', 'A', 'D', 'C', 'B', 'C'
+            ]
         }
-        print(f"📁 Загружено тестов: {len(tests)}")
-        return tests
+        
+        # Сохраняем пример теста
+        with open(os.path.join(self.tests_dir, 'test1.json'), 'w', encoding='utf-8') as f:
+            json.dump(example_test, f, ensure_ascii=False, indent=2)
+    
+    # Загружаем тесты из файлов
+    if os.path.exists(self.tests_dir):
+        for filename in os.listdir(self.tests_dir):
+            if filename.endswith('.json'):
+                test_id = filename[:-5]  # убираем .json
+                try:
+                    with open(os.path.join(self.tests_dir, filename), 'r', encoding='utf-8') as f:
+                        tests[test_id] = json.load(f)
+                    print(f"✅ Загружен тест: {test_id}")
+                except Exception as e:
+                    print(f"❌ Ошибка загрузки теста {test_id}: {e}")
+    
+    print(f"📁 Всего загружено тестов: {len(tests)}")
+    return tests
     
     def get_test(self, test_id):
         return self.tests.get(test_id)
@@ -531,3 +553,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
